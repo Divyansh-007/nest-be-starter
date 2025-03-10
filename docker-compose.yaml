@@ -1,17 +1,17 @@
-version: '3.8'
+version: '3'
 
 services:
   dev-db:
-    image: mongo:latest
+    image: prismagraphql/mongo-single-replica:4.4.3-bionic
+    container_name: nestjs-be-starter
+    ports:
+      - '27017:27017'
     environment:
       MONGO_INITDB_ROOT_USERNAME: root
-      MONGO_INITDB_ROOT_PASSWORD: password
-      DB_NAME: test
-    ports:
-      - 27017:27017
+      MONGO_INITDB_ROOT_PASSWORD: admin
+      MONGO_INITDB_DATABASE: test
     volumes:
-      - ./data:/data/db
-    networks:
-      - backend
-networks:
-  backend:
+      - mongodata:/data/db
+
+volumes:
+  mongodata:
