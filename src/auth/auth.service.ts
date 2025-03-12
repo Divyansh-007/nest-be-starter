@@ -3,12 +3,36 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { LoginDto, SignupDto } from './dto';
 import * as argon from 'argon2';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class AuthService {
   private logger;
-  constructor(private prisma: PrismaService) {
+  constructor(
+    private prisma: PrismaService,
+    private jwtService: JwtService,
+    private configService: ConfigService,
+  ) {
     this.logger = new Logger(AuthService.name, { timestamp: true });
+  }
+
+  signToken(userId: string, email: string) {
+    const payload = {
+      sub: userId,
+      email,
+    };
+
+    const secret = this.configService.get('JWT_SECRET');
+
+    const token = this.jwtService.signAsync(payload, {
+      expiresIn: '15m',
+      secret: secret,
+    });
+
+    return {
+      access_token: token,
+    };
   }
 
   async signup(dto: SignupDto) {
@@ -24,11 +48,9 @@ export class AuthService {
         },
       });
 
-      delete user.hash;
-
       return {
         message: 'User signed up successfully',
-        data: user,
+        data: this.signToken(user.id, user.email),
       };
     } catch (error) {
       this.logger.error(error.message);
@@ -60,11 +82,13 @@ export class AuthService {
         throw new BadRequestException('Email or Password does not match');
       }
 
-      delete user.hash;
       return {
         message: 'User logged in successfully',
-        data: user,
+        data: this.signToken(user.id, user.email),
       };
-    } catch (error) {}
+    } catch (error) {
+      this.logger.error(error.message);
+      throw new BadRequestException('Unable to login');
+    }
   }
 }
