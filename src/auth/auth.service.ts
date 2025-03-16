@@ -1,6 +1,11 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { LoginDto, SignupDto } from './dto';
+import { LoginDto, RefreshAccessDto, SignupDto } from './dto';
 import * as argon from 'argon2';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { JwtService } from '@nestjs/jwt';
@@ -25,13 +30,19 @@ export class AuthService {
 
     const secret = this.configService.get('JWT_SECRET');
 
-    const token = this.jwtService.signAsync(payload, {
+    const access_token = this.jwtService.signAsync(payload, {
       expiresIn: '15m',
       secret: secret,
     });
 
+    const refresh_token = this.jwtService.signAsync(payload, {
+      expiresIn: '7d',
+      secret: secret,
+    });
+
     return {
-      access_token: token,
+      access_token,
+      refresh_token,
     };
   }
 
@@ -89,6 +100,32 @@ export class AuthService {
     } catch (error) {
       this.logger.error(error.message);
       throw new BadRequestException('Unable to login');
+    }
+  }
+
+  async refreshToken(dto: RefreshAccessDto) {
+    try {
+      const decoded = this.jwtService.verify(dto.refresh_token, {
+        secret: this.configService.get('JWT_SECRET'),
+      });
+
+      const user = await this.prisma.user.findUnique({
+        where: {
+          id: decoded.sub,
+        },
+      });
+
+      if (!user) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+
+      return {
+        message: 'Access token refreshed successfully',
+        data: this.signToken(user.id, user.email),
+      };
+    } catch (error) {
+      this.logger.error(error.message);
+      throw new BadRequestException('Unable to refresh token');
     }
   }
 }
